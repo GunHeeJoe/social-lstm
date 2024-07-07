@@ -32,6 +32,9 @@ def getGridMask(frame, dimensions, num_person, neighborhood_size, grid_size, is_
 
     #instead of 2 inner loop, we check all possible 2-permutations which is 2 times faster.
     list_indices = list(range(0, mnp))
+    # P(list_indices, 2)를 추출함.
+    # ex)list_indcies가 3 -> (0,1),(0,2),(1,0),(1,2),(2,0),(2,1)의 조합이 생김
+    # (0, 1) -> 0번사람과 이웃후보1번 사람의 관계를 파악하고 이웃의 조건에 충족되면 cell에 1를 부여
     for real_frame_index, other_real_frame_index in itertools.permutations(list_indices, 2):
         current_x, current_y = frame_np[real_frame_index, 0], frame_np[real_frame_index, 1]
 
@@ -51,7 +54,7 @@ def getGridMask(frame, dimensions, num_person, neighborhood_size, grid_size, is_
 
         if cell_x >= grid_size or cell_x < 0 or cell_y >= grid_size or cell_y < 0:
                 continue
-
+    
         if is_occupancy:
             frame_mask[real_frame_index, cell_x + cell_y*grid_size] = 1
         else:
@@ -123,7 +126,13 @@ def getSequenceGridMask(sequence, dimensions, pedlist_seq, neighborhood_size, gr
     sequence_mask = []
 
     for i in range(sl):
+        # if not is_occupancy, getGridMask.shape = 이웃수(N) x 이웃수(N) x grid_size x grid_size
+        # if is_occupancy, getGridMask.shape = 이웃수(N) x grid_size x grid_size
+        # getGridMask : 보행자 - 이웃이 조건에 만족하면(가까우면), maks[보행자id][이웃id][이웃x][이웃y] = 1를 부여
+        # is_occupancy과 다른 이유는 특정 grid_cell x grid_cell에 이웃이 여러명일때 OSLTM은 (grid_cell, grid_cell)만 주지만,
+        # Social-LSTM은 해당 셀의 여러 이웃의 모든 정보를 추출해야하기 때문에 중복되게 저장을 방지함
         mask = Variable(torch.from_numpy(getGridMask(sequence[i], dimensions, len(pedlist_seq[i]), neighborhood_size, grid_size, is_occupancy)).float())
+
         if using_cuda:
             mask = mask.cuda()
         sequence_mask.append(mask)

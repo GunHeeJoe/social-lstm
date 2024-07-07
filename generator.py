@@ -177,9 +177,6 @@ class data_augmentator():
 			[delete_file(dir_path, [file_name]) for file_name in file_names if file_name not in base_file_names]
 
 
-
-
-
 def main():
     
 	parser = argparse.ArgumentParser()

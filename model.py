@@ -67,6 +67,9 @@ class SocialModel(nn.Module):
         numNodes = grid.size()[0]
 
         # Construct the variable
+        # social_tensor.shape = 이웃수(N) x (grid_size * grid_size * rnn_size)
+        # 특정 이웃의 특정 (grid_x, grid_y)에서의 hiddent_state정보를 추출함(단 flatten구조로)
+        # 그니까 social_tensor[0][0~rnn_size]는 0번 이웃의 (0,0)셀의 hiddent_state정보
         social_tensor = Variable(torch.zeros(numNodes, self.grid_size*self.grid_size, self.rnn_size))
         if self.use_cuda:
             social_tensor = social_tensor.cuda()
@@ -74,8 +77,9 @@ class SocialModel(nn.Module):
         # For each ped
         for node in range(numNodes):
             # Compute the social tensor
-            social_tensor[node] = torch.mm(torch.t(grid[node]), hidden_states)
 
+            social_tensor[node] = torch.mm(torch.t(grid[node]), hidden_states)
+    
         # Reshape the social tensor
         social_tensor = social_tensor.view(numNodes, self.grid_size*self.grid_size*self.rnn_size)
         return social_tensor
@@ -118,13 +122,15 @@ class SocialModel(nn.Module):
         look_up = args[7]
 
         numNodes = len(look_up)
+    
+        # outputs.shape = [seq*numNode, 5] : 각 시점별 보행자들의 위치를 예측하기 위해 이변량가우시안분포를 추정
+        # 이변량가우시안분포에서 사용할 Mean(x),Mean(y), VAR(x), VAR(y), corr(x,y)인 총 5개 예측
         outputs = Variable(torch.zeros(self.seq_length * numNodes, self.output_size))
         if self.use_cuda:            
             outputs = outputs.cuda()
 
         # For each frame in the sequence
         for framenum,frame in enumerate(input_data):
-
             # Peds present in the current frame
 
             #print("now processing: %s base frame number: %s, in-frame: %s"%(dataloader.get_test_file_name(), dataloader.frame_pointer, framenum))
@@ -140,9 +146,11 @@ class SocialModel(nn.Module):
 
             # List of nodes
             #print("lookup table :%s"% look_up)
+            # 보행자 id를 0번부터 재부여
             list_of_nodes = [look_up[x] for x in nodeIDs]
 
             corr_index = Variable((torch.LongTensor(list_of_nodes)))
+
             if self.use_cuda:            
                 corr_index = corr_index.cuda()
 
@@ -154,44 +162,47 @@ class SocialModel(nn.Module):
 
             #print(list_of_nodes.data)
             # Select the corresponding input positions
+            # 특정 시점 보행자의 (x,y)좌표
             nodes_current = frame[list_of_nodes,:]
             # Get the corresponding grid masks
+            # grid_current.shape = N x N x (grid_size*grid_size)
             grid_current = grids[framenum]
 
-            
-
-
             # Get the corresponding hidden and cell states
+            # hidden_states.shape = N x hidden_dimension
             hidden_states_current = torch.index_select(hidden_states, 0, corr_index)
-
 
             if not self.gru:
                 cell_states_current = torch.index_select(cell_states, 0, corr_index)
 
-            #print(grid_current.shape)
-            #print(hidden_states_current.shape)
             # Compute the social tensor
             social_tensor = self.getSocialTensor(grid_current, hidden_states_current)
 
             # Embed inputs
+            # [N, 2] -> [N, embedding_dim]
             input_embedded = self.dropout(self.relu(self.input_embedding_layer(nodes_current)))
-            # Embed the social tensor
-            tensor_embedded = self.dropout(self.relu(self.tensor_embedding_layer(social_tensor)))
 
+            # Embed the social tensor
+            # [N, grid_size * grid_size * hidden_state_size] -> [N, embedding_dim]
+            tensor_embedded = self.dropout(self.relu(self.tensor_embedding_layer(social_tensor)))
+            
             # Concat input
+            # [N, embedding_dim * 2]
             concat_embedded = torch.cat((input_embedded, tensor_embedded), 1)
 
             if not self.gru:
                 # One-step of the LSTM
+                # h_node : [N, rnn_size] 각 선수별 hidden_state
                 h_nodes, c_nodes = self.cell(concat_embedded, (hidden_states_current, cell_states_current))
             else:
                 h_nodes = self.cell(concat_embedded, (hidden_states_current))
 
-
             # Compute the output
+            # h_nodes : [N, rnn_size] // 특정 시점 각 보행자들의 hidden_state
             outputs[framenum*numNodes + corr_index.data] = self.output_layer(h_nodes)
 
             # Update hidden and cell states
+            # 현재시점에 trajectory를 갖는 사람들만 hidden_state 업데이트
             hidden_states[corr_index.data] = h_nodes
             if not self.gru:
                 cell_states[corr_index.data] = c_nodes

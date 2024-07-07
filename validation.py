@@ -162,7 +162,7 @@ def main():
 
             #vectorize datapoints
             x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
-
+        
             # <---------------- Experimental block (may need update in methods)----------------------->
             # x_seq = translate(x_seq, PedsList_seq, lookup_seq ,target_id_values)
             # angle = angle_between(reference_point, (x_seq[1][lookup_seq[target_id], 0].data.numpy(), x_seq[1][lookup_seq[target_id], 1].data.numpy()))
@@ -171,16 +171,16 @@ def main():
             # grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq, sample_args.neighborhood_size, sample_args.grid_size, sample_args.use_cuda)
             # x_seq, first_values_dict = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
 
-
+            # x_seq : 각 시점별 과거의 보행자들의 위치 : [seq_len, N, 2]
             if sample_args.use_cuda:                    
                 x_seq = x_seq.cuda()
 
+            # x_seq : 각 시점별 과거의 보행자들의 위치 : [seq_len, N, 2]
             if sample_args.method == 3: #vanilla lstm
                 ret_x_seq, loss = sample_validation_data_vanilla(x_seq, PedsList_seq, sample_args, net, lookup_seq, numPedsList_seq, dataloader)
-
             else:
                 ret_x_seq, loss = sample_validation_data(x_seq, PedsList_seq, grid_seq, sample_args, net, lookup_seq, numPedsList_seq, dataloader)
-            
+
             #<---------------------Experimental inverse block -------------->
             # ret_x_seq = revert_seq(ret_x_seq, PedsList_seq, lookup_seq, target_id_values, first_values_dict)
             # ret_x_seq = rotate_traj_with_target_ped(ret_x_seq, -angle, PedsList_seq, lookup_seq)
@@ -221,5 +221,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-

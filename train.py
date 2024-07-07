@@ -90,7 +90,7 @@ def main():
                         help='Whether store grids and use further epoch')
     
     args = parser.parse_args()
-    
+
     train(args)
 
 
@@ -113,8 +113,6 @@ def train(args):
     args.freq_validation = np.clip(args.freq_validation, 0, args.num_epochs)
     validation_epoch_list = list(range(args.freq_validation, args.num_epochs+1, args.freq_validation))
     validation_epoch_list[-1]-=1
-
-
 
     # Create the data loader object. This object would preprocess the data in terms of
     # batches each of size args.batch_size, of length args.seq_length
@@ -152,6 +150,7 @@ def train(args):
 
     # model creation
     net = SocialModel(args)
+
     if args.use_cuda:
         net = net.cuda()
 
@@ -194,11 +193,16 @@ def train(args):
             start = time.time()
 
             # Get batch data
+            # x, y : 시점 별 보행자의 (x,y)좌표
+            # numPedsList : 시점 별 보행자의 수
+            # PedsList : 시점별 보행자의 id
+            # target_ids : 모든 보행자의 id
             x, y, d , numPedsList, PedsList ,target_ids= dataloader.next_batch()
+
             loss_batch = 0
             
             #if we are in a new dataset, zero the counter of batch
-            if dataset_pointer_ins_grid is not dataloader.dataset_pointer and epoch is not 0:
+            if dataset_pointer_ins_grid is not dataloader.dataset_pointer and epoch != 0:
                 num_batch = 0
                 dataset_pointer_ins_grid = dataloader.dataset_pointer
 
@@ -219,7 +223,7 @@ def train(args):
 
                 #grid mask calculation and storage depending on grid parameter
                 if(args.grid):
-                    if(epoch is 0):
+                    if(epoch == 0):
                         grid_seq = getSequenceGridMask(x_seq, dataset_data, PedsList_seq,args.neighborhood_size, args.grid_size, args.use_cuda)
                         grids[dataloader.dataset_pointer].append(grid_seq)
                     else:
@@ -230,8 +234,7 @@ def train(args):
                 # vectorize trajectories in sequence
                 x_seq, _ = vectorize_seq(x_seq, PedsList_seq, lookup_seq)
 
-                
-                
+            
                 # <---------------------- Experimental block ----------------------->
                 # Main approach:
                 # 1) Translate all trajectories using first frame value of target trajectory so that target trajectory will start (0,0).
@@ -294,7 +297,7 @@ def train(args):
                 #number of peds in this sequence per frame
                 numNodes = len(lookup_seq)
 
-
+                # 0번째 시점의 hidden-state초기화
                 hidden_states = Variable(torch.zeros(numNodes, args.rnn_size))
                 if args.use_cuda:                    
                     hidden_states = hidden_states.cuda()
@@ -309,11 +312,13 @@ def train(args):
                 
 
                 # Forward prop
-                outputs, _, _ = net(x_seq, grid_seq, hidden_states, cell_states, PedsList_seq,numPedsList_seq ,dataloader, lookup_seq)
+                # 각 시점별 보행자들의 위치, id, 수, 초기 hidden-state과 cell-state, 마지막으로 이웃의 정보가 담겨있는 grid_seq를 활용
+                # outputs : [seq, N, 5] / 각 시점별 각 보행자들의 mean, var, corr예측
+                outputs, _, _ = net(x_seq, grid_seq, hidden_states, cell_states, PedsList_seq, numPedsList_seq ,dataloader, lookup_seq)
 
-                
                 # Compute loss
                 loss = Gaussian2DLikelihood(outputs, x_seq, PedsList_seq, lookup_seq)
+
                 loss_batch += loss.item()
 
                 # Compute gradients
@@ -468,7 +473,7 @@ def train(args):
                 x, y, d , numPedsList, PedsList ,target_ids = dataloader.next_batch()
 
                 if dataset_pointer_ins is not dataloader.dataset_pointer:
-                    if dataloader.dataset_pointer is not 0:
+                    if dataloader.dataset_pointer != 0:
                         print('Finished prosessed file : ', dataloader.get_file_name(-1),' Avarage error : ', err_epoch/num_of_batch)
                         num_of_batch = 0
                         epoch_result.append(results)

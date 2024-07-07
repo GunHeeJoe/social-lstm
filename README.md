@@ -1,5 +1,7 @@
 # Social LSTM implementation in PyTorch
 
+- 기존 코드는 변경없이 논문과 비교하면서 주석만 추가
+
 ## Project details
 **Semester project of Master of Computer Science in EPFL**  
 **Student name** : Baran Nama  
